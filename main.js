@@ -1,6 +1,7 @@
 const $ = document.querySelector.bind(document);
 const $$ = document.querySelectorAll.bind(document);
 
+const PLAYER_STORAGE_KEY = "F8_PLAYER";
 const player = $(".player");
 const cd = $(".cd");
 const heading = $("header h2");
@@ -11,12 +12,15 @@ const progress = $("#progress");
 const nextBtn = $(".btn-next");
 const prevBtn = $(".btn-prev");
 const randomBtn = $(".btn-random");
+const repeatBtn = $(".btn-repeat");
+const playlist = $(".playlist");
 
 const app = {
   currentIndex: 0,
   isPlaying: false,
   isRandom: false,
-
+  isRepeat: false,
+  config: JSON.parse(localStorage.getItem(PLAYER_STORAGE_KEY)) || {},
   songs: [
     {
       name: "DeToiOmEm",
@@ -67,10 +71,17 @@ const app = {
       image: "./assets/img/song4.jpg",
     },
   ],
+  setConfig: function (key, value) {
+    this.config[key] = value;
+    localStorage.setItem(PLAYER_STORAGE_KEY, JSON.stringify(this.config));
+  },
   render: function () {
-    var htmls = this.songs.map((song) => {
+    var htmls = this.songs.map((song, index) => {
       return `
-        <div class="song">
+        <div class=
+        "song ${index === this.currentIndex ? "active" : ""}
+         "data-index =
+         "${index}">
           <div
             class="thumb"
             style="
@@ -87,7 +98,7 @@ const app = {
         </div>    
       `;
     });
-    $(".playlist").innerHTML = htmls.join("");
+    playlist.innerHTML = htmls.join("");
   },
 
   defineProperties: function () {
@@ -153,7 +164,7 @@ const app = {
       }
     };
     // Song早送り
-    (progress.onchange = function () {
+    (progress.oninput = function () {
       const seekTime = progress.value * (audio.duration / 100);
       audio.currentTime = seekTime;
     }),
@@ -165,6 +176,8 @@ const app = {
           _this.nextSong();
         }
         audio.play();
+        _this.render();
+        _this.scrollActiveSong();
       });
     //SongをPrevする時
     prevBtn.onclick = function () {
@@ -174,13 +187,67 @@ const app = {
         _this.prevSong();
       }
       audio.play();
+      _this.render();
+      _this.scrollActiveSong();
     };
 
     //Random を On・Offする
     randomBtn.onclick = function () {
       _this.isRandom = !_this.isRandom;
+      _this.setConfig("isRandom", _this.isRandom);
       randomBtn.classList.toggle("active", _this.isRandom);
     };
+
+    //RepeatをOn・Offする
+    repeatBtn.onclick = function () {
+      _this.isRepeat = !_this.isRepeat;
+      _this.setConfig("isRepeat", _this.isRepeat);
+
+      repeatBtn.classList.toggle("active", _this.isRepeat);
+    };
+
+    //SongがEndedの時、自動Next / Repeat 処理
+    audio.onended = function () {
+      if (_this.isRepeat) {
+        audio.play();
+      } else {
+        nextBtn.click();
+      }
+    };
+
+    // Playlist をクリック
+    playlist.onclick = function (e) {
+      const songNode = e.target.closest(".song:not(.active)");
+      if (songNode || e.target.closest(".option")) {
+        //Songをクリックする際の処理
+        if (songNode) {
+          _this.currentIndex = Number(songNode.getAttribute("data-index"));
+          _this.loadCurrentSong();
+          _this.render();
+          audio.play();
+        }
+
+        //Optionをクリックする際の処理
+        if (e.target.closest(".option")) {
+        }
+      }
+    };
+  },
+
+  scrollActiveSong: function () {
+    setTimeout(function () {
+      if (this.currentIndex >= 4) {
+        $(".song.active").scrollIntoView({
+          behavior: "smooth",
+          block: "nearest",
+        });
+      } else {
+        $(".song.active").scrollIntoView({
+          behavior: "smooth",
+          block: "center",
+        });
+      }
+    }, 300);
   },
 
   loadCurrentSong: function () {
@@ -188,6 +255,12 @@ const app = {
     cdThumb.style.backgroundImage = `url(${this.currentSong.image})`;
     audio.src = this.currentSong.path;
   },
+
+  loadConfig: function () {
+    this.isRandom = this.config.isRandom;
+    this.isRepeat = this.config.isRepeat;
+  },
+
   nextSong: function () {
     this.currentIndex++;
     if (this.currentIndex >= this.songs.length) {
@@ -213,6 +286,8 @@ const app = {
     this.loadCurrentSong();
   },
   start: function () {
+    // Config からの設定をアプリにアサイン
+    this.loadConfig();
     // オブジェクトのプロパティを定義
     this.defineProperties();
     //DOM Evenを処理
@@ -221,6 +296,10 @@ const app = {
     this.loadCurrentSong();
     //Playlistをレンダリング
     this.render();
+
+    // Repeat Btn & Random Btnの最初の状態表示
+    randomBtn.classList.toggle("active", this.isRandom);
+    repeatBtn.classList.toggle("active", this.isRepeat);
   },
 };
 
